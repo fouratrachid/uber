@@ -1,4 +1,11 @@
-import { ScrollView, Text, View, Image } from "react-native";
+import {
+  ScrollView,
+  Text,
+  View,
+  Image,
+  Alert,
+  TouchableOpacity,
+} from "react-native";
 import { icons, images } from "@/constants";
 import InputField from "@/components/InputField";
 import { useState } from "react";
@@ -8,8 +15,12 @@ import OAuth from "@/components/OAuth";
 import { useSignUp } from "@clerk/clerk-expo";
 import { useRouter } from "expo-router";
 import { ReactNativeModal } from "react-native-modal";
+import FlashMessage, { showMessage } from "react-native-flash-message";
+import { Ionicons } from "@expo/vector-icons";
+
 const SignUp = () => {
   const { isLoaded, signUp, setActive } = useSignUp();
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
   const router = useRouter();
   const [form, setForm] = useState({
     name: "",
@@ -37,10 +48,14 @@ const SignUp = () => {
       // Set 'pendingVerification' to true to display second form
       // and capture OTP code
       setVerification({ ...verification, state: "pending" });
-    } catch (err) {
+    } catch (err: any) {
       // See https://clerk.com/docs/custom-flows/error-handling
       // for more info on error handling
-      console.error(JSON.stringify(err, null, 2));
+      showMessage({
+        message: err.errors[0].longMessage,
+        type: "danger",
+        icon: "danger",
+      });
     }
   };
   // Handle submission of verification form
@@ -57,16 +72,14 @@ const SignUp = () => {
       // and redirect the user
       if (signUpAttempt.status === "complete") {
         // TODO: Create a user in the database
-
         await setActive({ session: signUpAttempt.createdSessionId });
         setVerification({ ...verification, state: "success" });
-        router.replace("//(root)/(tabs)/home");
       } else {
         // If the status is not complete, check why. User may need to
         // complete further steps.
         setVerification({
           ...verification,
-          state: "failed",
+          state: "pending",
           error: "Verification failed.",
         });
         console.error(JSON.stringify(signUpAttempt, null, 2));
@@ -74,10 +87,16 @@ const SignUp = () => {
     } catch (err: any) {
       // See https://clerk.com/docs/custom-flows/error-handling
       // for more info on error handling
+
       setVerification({
         ...verification,
-        state: "failed",
-        error: err.errors[0].long_message,
+        state: "pending",
+        error: err.errors[0].longMessage,
+      });
+      showMessage({
+        message: err.errors[0].longMessage,
+        type: "danger",
+        icon: "danger",
       });
     }
   };
@@ -129,11 +148,21 @@ const SignUp = () => {
         </View>
         <ReactNativeModal
           isVisible={verification.state === "pending"}
-          onModalHide={() =>
-            setVerification({ ...verification, state: "success" })
-          }
+          onModalHide={() => {
+            if (verification.state === "success") {
+              setShowSuccessModal(true);
+            }
+          }}
         >
           <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px] ">
+            <TouchableOpacity
+              className="absolute top-2.5 right-2.5 "
+              onPress={() =>
+                setVerification({ ...verification, state: "default" })
+              }
+            >
+              <Ionicons name="close" size={24} color="black" />
+            </TouchableOpacity>
             <Text className="text-2xl font-JakartaExtraBold mb-2 ">
               Verification
             </Text>
@@ -163,7 +192,7 @@ const SignUp = () => {
             />
           </View>
         </ReactNativeModal>
-        <ReactNativeModal isVisible={verification.state === "success"}>
+        <ReactNativeModal isVisible={showSuccessModal}>
           <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px]">
             <Image
               source={images.check}
@@ -178,12 +207,16 @@ const SignUp = () => {
             </Text>
             <CustomButton
               title="Browse Home"
-              onPress={() => router.replace("/(root)/(tabs)/home")}
+              onPress={() => {
+                setShowSuccessModal(false);
+                router.push("/(root)/(tabs)/home");
+              }}
               className="mt-5"
             />
           </View>
         </ReactNativeModal>
       </View>
+      <FlashMessage position="top" />
     </ScrollView>
   );
 };
